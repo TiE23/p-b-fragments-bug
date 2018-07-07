@@ -4,7 +4,7 @@ type Query {
   feed: [Post!]!
   drafts: [Post!]!
   post(id: ID!): Post
-  me: User
+  me: PrivateUser
 }
 
 type Mutation {
@@ -21,10 +21,18 @@ type Subscription {
 
 type AuthPayload {
   token: String!
-  user: User!
+  user: PrivateUser!
 }
 
+# Hide email for privacy
 type User {
+  id: ID!
+  name: String!
+  posts: [Post!]!
+}
+
+# Don't hide the email
+type PrivateUser {
   id: ID!
   email: String!
   name: String!
