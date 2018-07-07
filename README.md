@@ -1,80 +1,147 @@
-<h1 align="center"><strong>Boilerplate for an Advanced GraphQL Server</strong></h1>
+# Prisma-Binding(?) Fragments Bug Reproducer
+Made with graphql-boilerplate node-graphql-server (advanced)
+https://github.com/graphql-boilerplates/node-graphql-server/tree/master/advanced
 
-<br />
+This is a project to reproduce a fragments issue I'm having as of 2018-07-07.
 
-![](https://imgur.com/lIi4YrZ.png)
+## What did I do?
+What I did is I defined a new type in the `schema.graphql` named `PrivateUser`, where it has the user's email address and I removed the user's email address from the original type `User`. This is in order to hide a user's email address from being accessed by random people in methods such as looking at a `Post` and looking at the `Author` and gaining instant access to the user's email address.
 
-<div align="center"><strong>🚀 Bootstrap your GraphQL server within seconds</strong></div>
-<div align="center">Advanced starter kit for a flexible GraphQL server for Node.js - based on best practices from the GraphQL community.</div>
+Nothing complicated. Just a simple and common thing.
 
-## Features
+Look at the git logs to see my change.
 
-- **Scalable GraphQL server:** The server uses [`graphql-yoga`](https://github.com/prisma/graphql-yoga) which is based on Apollo Server & Express
-- **GraphQL database:** Includes GraphQL database binding to [Prisma](https://www.prismagraphql.com) (running on MySQL)
-- **Authentication**: Signup and login workflows are ready to use for your users
-- **Tooling**: Out-of-the-box support for [GraphQL Playground](https://github.com/prisma/graphql-playground) & [query performance tracing](https://github.com/apollographql/apollo-tracing)
-- **Extensible**: Simple and flexible [data model](./database/datamodel.graphql) – easy to adjust and extend
-- **No configuration overhead**: Preconfigured [`graphql-config`](https://github.com/prisma/graphql-config) setup
-- **Realtime updates**: Support for GraphQL subscriptions
+## Steps to get started
+* Clone this repo.
+* Install modules with `npm install`.
+* Start the server
+    * You can just run the server with `npm run start` then point your Playground at http://localhost:4000
+    * You can run the server and a browser Playground with `npm run dev`
 
-For a fully-fledged **GraphQL & Node.js tutorial**, visit [How to GraphQL](https://www.howtographql.com/graphql-js/0-introduction/). You can more learn about the idea behind GraphQL boilerplates [here](https://blog.graph.cool/graphql-boilerplates-graphql-create-how-to-setup-a-graphql-project-6428be2f3a5).
-
-## Requirements
-
-You need to have the [GraphQL CLI](https://github.com/graphql-cli/graphql-cli) installed to bootstrap your GraphQL server using `graphql create`:
-
-```sh
-npm install -g graphql-cli
+## Let's repro this!
+### 1 - Login
+Log in the example user:
+```
+mutation login {
+  login(
+    email: "developer@example.com",
+    password: "nooneknows"
+  ) {
+    token
+    user {
+      id
+    }
+  }
+}
 ```
 
-## Getting started
-
-```sh
-# 1. Bootstrap GraphQL server in directory `my-app`, based on `node-advanced` boilerplate
-graphql create my-app --boilerplate node-advanced
-
-# 2. When prompted, deploy the Prisma service to a _public cluster_
-
-# 3. Navigate to the new project
-cd my-app
-
-# 4. Start server (runs on http://localhost:4000) and open GraphQL Playground
-yarn dev
+Copy the token and add the proper header to your playground:
+```
+{
+  "Authorization": "Bearer TOKEN_HERE"
+}
 ```
 
-![](https://imgur.com/hElq68i.png)
+### 2 - me query
+Run the basic me() query, which returns PrivateUser.
+```
+query me {
+  me {
+    id
+    name
+    email
+  }
+}
+```
+This works.
 
-## Documentation
+### 3 - Attempt to use a Fragment
+Now, let's define a fragment and try to use it.
+```
+query me {
+  me {
+    ...PrivateUserFragment
+  }
+}
 
-### Commands
+fragment PrivateUserFragment on PrivateUser {
+  id
+  name
+  email
+}
+```
 
-* `yarn start` starts GraphQL server on `http://localhost:4000`
-* `yarn dev` starts GraphQL server on `http://localhost:4000` _and_ opens GraphQL Playground
-* `yarn playground` opens the GraphQL Playground for the `projects` from [`.graphqlconfig.yml`](./.graphqlconfig.yml)
-* `yarn prisma <subcommand>` gives access to local version of Prisma CLI (e.g. `yarn prisma deploy`)
+**ERROR** output:
+```
+{
+  "data": {
+    "me": null
+  },
+  "errors": [
+    {
+      "message": "Field 'user' of type 'User' must have a sub selection. (line 2, column 3):\n  user(where: $_v0_where)\n  ^",
+      "locations": [],
+      "path": [
+        "user"
+      ]
+    }
+  ]
+}
+```
 
-> **Note**: We recommend that you're using `yarn dev` during development as it will give you access to the GraphQL API or your server (defined by the [application schema](./src/schema.graphql)) as well as to the Prisma API directly (defined by the [Prisma database schema](./generated/prisma.graphql)). If you're starting the server with `yarn start`, you'll only be able to access the API of the application schema.
+### 4 - Sanity check
+Let's make sure that fragments are even working. Let's show off a version of me() query working with fragments so long as the type is `User`:
+```
+query me2 {
+  me2 {
+    ...UserFragment
+  }
+}
 
-### Project structure
+fragment UserFragment on User {
+  id
+  name
+}
+```
 
-![](https://imgur.com/95faUsa.png)
+This totally works.
 
-| File name 　　　　　　　　　　　　　　| Description 　　　　　　　　<br><br>|
-| :--  | :--         |
-| `├── .env` | Defines environment variables |
-| `├── .graphqlconfig.yml` | Configuration file based on [`graphql-config`](https://github.com/prisma/graphql-config) (e.g. used by GraphQL Playground).|
-| `└── database ` (_directory_) | _Contains all files that are related to the Prisma database service_ |\
-| `　　├── prisma.yml` | The root configuration file for your Prisma database service ([docs](https://www.prismagraphql.com/docs/reference/prisma.yml/overview-and-example-foatho8aip)) |
-| `　　└── datamodel.graphql` | Defines your data model (written in [GraphQL SDL](https://blog.graph.cool/graphql-sdl-schema-definition-language-6755bcb9ce51)) |
-| `└── src ` (_directory_) | _Contains the source files for your GraphQL server_ |
-| `　　├── index.js` | The entry point for your GraphQL server |
-| `　　├── schema.graphql` | The **application schema** defining the API exposed to client applications  |
-| `　　├── resolvers` (_directory_) | _Contains the implementation of the resolvers for the application schema_ |
-| `　　└── generated` (_directory_) | _Contains generated files_ |
-| `　　　　└── prisma.grapghql` | The **Prisma database schema** defining the Prisma GraphQL API  |
+### 5 - Causes?
+It is my theory that perhaps the binding will not match the fragment because the type's name `PrivateUser` does not match Prisma's query's type name `User`?
 
-## Contributing
+#### Additional check
+No surprise that also fails to work in a more complicated situation where I attempt to use the Fragment on mutation Login that returns a `AuthPayload` type. So it's not just some weird edge-case with how `info` argument works in `src/resolvers/AuthPayload.js` as I personally originally came across the issue.
+```
+mutation login {
+  login(
+    email: "developer@example.com",
+    password: "nooneknows"
+  ) {
+    token
+    user {
+      ...PrivateUserFragment
+    }
+  }
+}
 
-The GraphQL boilerplates are maintained by the GraphQL community, with official support from the [Apollo](https://dev-blog.apollodata.com) & [Graphcool](https://blog.graph.cool/) teams.
-
-Your feedback is **very helpful**, please share your opinion and thoughts! If you have any questions or want to contribute yourself, join the [`#graphql-boilerplate`](https://graphcool.slack.com/messages/graphql-boilerplate) channel on our [Slack](https://graphcool.slack.com/).
+fragment PrivateUserFragment on PrivateUser {
+  id
+  name
+  email
+}
+```
+**Error** output:
+```
+{
+  "data": null,
+  "errors": [
+    {
+      "message": "Field 'user' of type 'User' must have a sub selection. (line 2, column 3):\n  user(where: $_v0_where)\n  ^",
+      "locations": [],
+      "path": [
+        "user"
+      ]
+    }
+  ]
+}
+```
