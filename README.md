@@ -145,3 +145,48 @@ fragment PrivateUserFragment on PrivateUser {
   ]
 }
 ```
+
+### 6 - Hacky work around fail
+So I wonder. Should I just pretend that the fragment is meant for type `User`?
+```
+query me {
+  me {
+    ...PrivateUserFragment
+  }
+}
+
+fragment PrivateUserFragment on User {
+  id
+  name
+  email
+}
+```
+Playground complains that I'm matching the wrong type. Whatever. I hit run and get this dual-message result **ERROR**:
+```
+{
+  "error": {
+    "errors": [
+      {
+        "message": "Fragment \"PrivateUserFragment\" cannot be spread here as objects of type \"PrivateUser\" can never be of type \"User\".",
+        "locations": [
+          {
+            "line": 3,
+            "column": 5
+          }
+        ]
+      },
+      {
+        "message": "Cannot query field \"email\" on type \"User\".",
+        "locations": [
+          {
+            "line": 10,
+            "column": 3
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+So it recognizes that the fragment is meant for type `PrivateUser` and this fragment for type `User` is incompatible... But when I make the fragment for type `PrivateUser` it fails to even use it!!
